@@ -1,4 +1,4 @@
 #include <unistd.h>
 #include <stdio.h>
 
-void *my_alloc(size_t space_amount);
+void *my_alloc(unsigned space_amount);

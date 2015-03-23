@@ -3,9 +3,10 @@
 typedef struct Node
 {
     struct Node *next, *prev;
+    unsigned block_size;
 } Node;
 
-void *request_mem(size_t space_amount)
+void *request_mem(unsigned space_amount)
 {
     void *allocated_mem = sbrk(space_amount);
 
@@ -20,7 +21,7 @@ void *request_mem(size_t space_amount)
     }
 }
 
-void *my_alloc(size_t space_amount)
+void *my_alloc(unsigned space_amount)
 {
     static void *in_node;
 
@@ -29,20 +30,38 @@ void *my_alloc(size_t space_amount)
         printf("First call.\n");
 
         //request 1 Mb block
-        in_node = request_mem(1 << 20);
+        unsigned new_mem_size = 1 << 20;
+        in_node = request_mem(new_mem_size);
 
         //init new block
         Node *new_block = (Node *) in_node;
-        new_block->next = NULL;
-        new_block->prev = NULL;
+        new_block->next = new_block;
+        new_block->prev = new_block;
+        new_block->block_size = new_mem_size;
     }
     else
     {
-        //пройти по списку свободных
-        //найти где нам хватит места
-        //отрезать кусок
-        //вставить остаток в список
-        //иначе запросить еще и создать новый блок
+        Node *current_node = in_node;
+        while (current_node != in_node)
+        {
+            if (current_node->block_size >= space_amount)
+            {
+                if (current_node->block_size - space_amount >= sizeof(Node))
+                {
+                    Node *new_block = (Node *) in_node;
+                    new_block->next = current_node->next;
+                    new_block->prev = current_node->prev;
+                    new_block->block_size = current_node->block_size - space_amount;
+                }
+                else
+                {
+                    current_node->prev->next = current_node->next;
+                    current_node->next->prev = current_node->prev;
+                }
+            }
+            current_node = current_node->next;
+        }
+
         printf("Second call.\n");
     }
 
