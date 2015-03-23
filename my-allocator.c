@@ -3,7 +3,9 @@
 static const char IS_FREE = 1;
 static const char NOT_FREE = 0;
 
-void *fuck;
+static const unsigned mem_to_request = 100;
+
+void *in_node;
 
 //16 bytes
 typedef struct Header
@@ -30,12 +32,17 @@ void *request_mem(unsigned space_amount)
 
 void print_mem_list(Header *in_node)
 {
-    printf("MEMORY\n");
+    //printf("MEMORY\n");
     Header *current_node = in_node;
 
     while (current_node != NULL)
     {
-        printf("%p - %d(%d)\n", current_node, current_node->block_size, (int) current_node->is_free);
+        printf("\033[35m%p - %d(HEADER)\033[0\n", current_node, sizeof(Header));
+
+        if (current_node->is_free == IS_FREE)
+            printf("\033[32m%p - %d(FREE)\033[0m\n\n", (char*)current_node + sizeof(Header), current_node->block_size);
+        else
+            printf("\033[31m%p - %d(ALLOC)\033[0m\n\n", (char*)current_node + sizeof(Header), current_node->block_size);
         current_node = current_node->next;
     }
     printf("\n");
@@ -43,16 +50,16 @@ void print_mem_list(Header *in_node)
 
 void *my_alloc(unsigned space_amount)
 {
-    printf("\033[32mALLOC: %d\033[0m\n", space_amount);
-    static void *in_node;
+    printf("\033[0mALLOC: %d\033[0m\n", space_amount);
+    //static void *in_node;
 
     if (in_node == NULL)
     {
         //printf("First call.\n");
 
         //request 1 Mb block
-        unsigned new_mem_size = /*1 << 20*/ 200;
-        in_node = request_mem(new_mem_size);
+        //unsigned new_mem_size = /*1 << 20*/ 200;
+        in_node = request_mem(mem_to_request);
 
         if (in_node == NULL)
         {
@@ -64,7 +71,7 @@ void *my_alloc(unsigned space_amount)
         new_block->next = NULL;
         new_block->prev = NULL;
         new_block->is_free = IS_FREE;
-        new_block->block_size = new_mem_size - sizeof(Header);
+        new_block->block_size = mem_to_request - sizeof(Header);
     }
 
     //print_mem_list(in_node);
@@ -91,7 +98,7 @@ void *my_alloc(unsigned space_amount)
 
             current_node->is_free = NOT_FREE;
             print_mem_list(in_node);
-            fuck = in_node;
+            in_node = in_node;
             return (char*)current_node + sizeof(Header);
         }
 
@@ -102,44 +109,65 @@ void *my_alloc(unsigned space_amount)
 
 
     fprintf(stderr, "No free memory.");
+
+    Header *new_block = request_mem(mem_to_request);
+
+    if (new_block == NULL)
+        return NULL;
+
+
+
+    new_block->next = NULL;
+    new_block->prev = NULL;
+    new_block->is_free = IS_FREE;
+    new_block->block_size = mem_to_request - sizeof(Header);
+
     return NULL;
 }
 
 void my_free(void *ptr)
 {
     Header *block = (Header*) ((char*)ptr - sizeof(Header));
-    printf("\033[32mFREE: %d\033[0m\n", block->block_size);
+    printf("\033[0mFREE: %d\033[0m\n", block->block_size);
     block->is_free = IS_FREE;
 
     //merge
     if ((block->next != NULL && block->next->is_free == IS_FREE) &&
         (block->prev != NULL && block->prev->is_free == IS_FREE))
     {
+        block->prev->block_size += block->block_size +
+                                   block->next->block_size +
+                                   sizeof(Header) + sizeof(Header);
+
         block->prev->next = block->next->next;
 
         if (block->next->next != NULL)
             block->next->next->prev = block->prev;
-
-        block->prev->block_size += block->block_size +
-                                   block->next->block_size +
-                                   sizeof(Header) + sizof(Header);
     }
     else
     {
-        if ((block->next != NULL && block->next->is_free == IS_FREE))
+        if (block->next != NULL && block->next->is_free == IS_FREE)
         {
+            block->block_size += block->next->block_size +
+                                       sizeof(Header);
+
             block->next = block->next->next;
 
             if (block->next->next != NULL)
                 block->next->next->prev = block;
-
-            block->prev->block_size += block->next->block_size +
-                                       sizof(Header);
         }
+
         if (block->prev != NULL && block->prev->is_free == IS_FREE)
         {
-        //<-
+            block->prev->block_size += block->block_size +
+                                       sizeof(Header);
+
+            block->prev->next = block->next;
+
+            if (block->next != NULL)
+                block->next->prev = block->prev;
         }
     }
-    print_mem_list(fuck);
+
+    print_mem_list(in_node);
 }
