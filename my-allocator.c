@@ -3,8 +3,6 @@
 static const char IS_FREE = 1;
 static const char NOT_FREE = 0;
 
-static const unsigned DEFAULT_MEM_REQUEST = 1 << 20;
-
 void *in_block;
 
 //16 bytes
@@ -134,9 +132,15 @@ Header *extend_last_block(Header *in_block)
     last_block->next = new_block;
     new_block->prev = last_block;
 
-    merge_free_blocks(last_block);
-
-    return last_block;
+    if (last_block->is_free == NOT_FREE)
+    {
+        return new_block;
+    }
+    else
+    {
+        merge_next(last_block);
+        return last_block;
+    }
 }
 
 void *allocate_block(Header *block, unsigned space_amount)
@@ -150,8 +154,15 @@ void *allocate_block(Header *block, unsigned space_amount)
         new_block->block_size = block->block_size - space_amount - sizeof(Header);
         new_block->is_free = IS_FREE;
 
+        if (block->next != NULL)
+        {
+            block->next->prev = new_block;
+        }
+
         block->next = new_block;
         block->block_size = space_amount;
+
+        merge_next(new_block);
     }
 
     block->is_free = NOT_FREE;
@@ -194,11 +205,13 @@ void *my_malloc(unsigned space_amount)
             return NULL;
     }
 
-    return NULL;
+    return allocate_block(last_block, space_amount);
 }
 
 void *my_calloc(unsigned space_amount)
 {
+    printf("\033[0mCALLOC: %d\033[0m\n", space_amount);
+
     void *new_mem = my_malloc(space_amount);
 
     if (new_mem == NULL)
@@ -209,6 +222,7 @@ void *my_calloc(unsigned space_amount)
 
 void *my_realloc(void *ptr, unsigned new_space_amount)
 {
+    printf("\033[0mREALLOC: %p - %d\033[0m\n", ptr, new_space_amount);
     Header *block = (Header*) ((char*)ptr - sizeof(Header));
 
     if (new_space_amount <= block->block_size)
@@ -218,8 +232,8 @@ void *my_realloc(void *ptr, unsigned new_space_amount)
     }
     else
     {
-        if (block->next != NULL && block->is_free == IS_FREE &&
-            (block->block_size + sizeof(Header)) >= new_space_amount)
+        if (block->next != NULL && block->next->is_free == IS_FREE &&
+            (block->block_size + block->next->block_size + sizeof(Header)) >= new_space_amount)
         {
             merge_next(block);
             return allocate_block(block, new_space_amount);
@@ -243,7 +257,7 @@ void *my_realloc(void *ptr, unsigned new_space_amount)
 void my_free(void *ptr)
 {
     Header *block = (Header*) ((char*)ptr - sizeof(Header));
-    printf("\033[0mFREE: %d\033[0m\n", block->block_size);
+    printf("\033[0mFREE: %p - %d\033[0m\n", ptr, block->block_size);
 
     block->is_free = IS_FREE;
     merge_free_blocks(block);
