@@ -1,9 +1,7 @@
-#include <my-allocator.h>
+#include "my-allocator.h"
 
 static const char IS_FREE = 1;
 static const char NOT_FREE = 0;
-
-void *in_block;
 
 //16 bytes
 typedef struct Header
@@ -12,6 +10,8 @@ typedef struct Header
     char is_free;
     struct Header *next, *prev;
 } Header;
+
+Header *in_block = NULL;
 
 void *request_mem(unsigned space_amount)
 {
@@ -47,16 +47,18 @@ void print_mem_list(Header *in_block)
 
     while (current_block != NULL)
     {
-        printf("\033[35m%p - %d(HEADER)\033[0\n", current_block, sizeof(Header));
+        printf("\033[35m%p - %d(HEADER)\033[0m\n", current_block, sizeof(Header));
 
         if (current_block->is_free == IS_FREE)
         {
-            printf("\033[32m%p - %d(FREE)\033[0m\n\n", (char*)current_block + sizeof(Header),
+            printf("\033[32m%p - %d(FREE)\033[0m\n\n",
+                   (char*)current_block + sizeof(Header),
                    current_block->block_size);
         }
         else
         {
-            printf("\033[31m%p - %d(ALLOC)\033[0m\n\n", (char*)current_block + sizeof(Header),
+            printf("\033[31m%p - %d(ALLOC)\033[0m\n\n",
+                   (char*)current_block + sizeof(Header),
                    current_block->block_size);
         }
 
@@ -87,7 +89,7 @@ void merge_next(Header *block)
     if (block->next != NULL && block->next->is_free == IS_FREE)
     {
         block->block_size += block->next->block_size +
-                                   sizeof(Header);
+                             sizeof(Header);
 
         if (block->next->next != NULL)
             block->next->next->prev = block;
@@ -125,7 +127,7 @@ Header *extend_last_block(Header *in_block)
     if (new_block == NULL)
         return NULL;
 
-    //First block
+    //List is empty
     if (last_block == NULL)
         return new_block;
 
@@ -174,7 +176,6 @@ void *allocate_block(Header *block, unsigned space_amount)
 void *my_malloc(unsigned space_amount)
 {
     printf("\033[0mALLOC: %d\033[0m\n", space_amount);
-    //static void *in_block;
 
     if (in_block == NULL)
     {
@@ -185,7 +186,8 @@ void *my_malloc(unsigned space_amount)
 
     while (current_block != NULL)
     {
-        if (current_block->is_free == IS_FREE && current_block->block_size >= space_amount)
+        if (current_block->is_free == IS_FREE &&
+            current_block->block_size >= space_amount)
         {
             return allocate_block(current_block, space_amount);
         }
@@ -195,7 +197,7 @@ void *my_malloc(unsigned space_amount)
 
     printf("No free memory. Try to request more.\n");
 
-    //Try to add more memory into last block
+    //Try to extend last block
     Header *last_block = extend_last_block(in_block);
 
     while (last_block->block_size < space_amount)
@@ -240,7 +242,6 @@ void *my_realloc(void *ptr, unsigned new_space_amount)
         }
         else
         {
-            //malloc
             void *new_mem = my_malloc(new_space_amount);
 
             if (new_mem == NULL)
@@ -261,6 +262,15 @@ void my_free(void *ptr)
 
     block->is_free = IS_FREE;
     merge_free_blocks(block);
+
+    if (in_block->next == NULL &&
+        in_block->prev == NULL &&
+        in_block->is_free == IS_FREE)
+    {
+        printf("Return all memory.\n");
+        brk(in_block);
+        in_block = NULL;
+    }
 
     print_mem_list(in_block);
 }
